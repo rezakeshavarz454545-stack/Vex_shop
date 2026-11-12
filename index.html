@@ -339,7 +339,7 @@ $("vex-add").onclick=async()=>{
  $("vex-image").value="";
  showProducts();
 };
-db.auth.onAuthStateChange(()=>checkSession());
+
 await checkSession();
 })();
 </script>
