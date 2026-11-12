@@ -298,7 +298,7 @@ $("vex-login-btn").onclick=async()=>{
   email:$("vex-email").value.trim(),
   password:$("vex-password").value
  });
- if(error){msg("خطا: "+error.message);return;}
+ if(error){alert("خطای ورود: "+error.message);return;}
  await checkSession();
 };
 $("vex-logout").onclick=async()=>{
