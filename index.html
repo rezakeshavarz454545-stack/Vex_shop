@@ -214,4 +214,133 @@ function createOrder(){
 function copyCard(){navigator.clipboard?.writeText('6221061260726114').then(()=>alert('شماره کارت کپی شد.')).catch(()=>alert('شماره کارت: ۶۲۲۱۰۶۱۲۶۰۷۲۶۱۱۴'))}
 renderFeatured();
 </script>
+<!-- VEX SHOP ADMIN PANEL -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<section id="vex-admin" style="direction:rtl;max-width:700px;margin:30px auto;padding:20px;background:#101827;color:white;border-radius:16px;font-family:Arial">
+  <h2>پنل مدیریت VEX SHOP</h2>
+  <div id="vex-login">
+    <input id="vex-email" type="email" placeholder="ایمیل مدیر" style="display:block;width:100%;padding:12px;margin:10px 0;box-sizing:border-box">
+    <input id="vex-password" type="password" placeholder="رمز عبور" style="display:block;width:100%;padding:12px;margin:10px 0;box-sizing:border-box">
+    <button id="vex-login-btn">ورود مدیر</button>
+  </div>
+
+  <div id="vex-dashboard" hidden>
+    <h3>افزودن محصول</h3>
+    <input id="vex-name" placeholder="نام محصول">
+    <textarea id="vex-description" placeholder="توضیحات محصول"></textarea>
+    <select id="vex-category">
+      <option value="دستبند مهره‌ای">دستبند مهره‌ای</option>
+      <option value="ست فوتبالی">ست فوتبالی</option>
+      <option value="ست مهره‌ای">ست مهره‌ای</option>
+      <option value="دستبندهای فوتبالی">دستبندهای فوتبالی</option>
+    </select>
+    <input id="vex-price" type="number" placeholder="قیمت به تومان">
+    <input id="vex-stock" type="number" placeholder="موجودی">
+    <input id="vex-image" type="file" accept="image/png,image/jpeg,image/webp">
+    <button id="vex-add">ثبت محصول</button>
+    <p id="vex-message"></p>
+    <h3>محصولات ثبت‌شده</h3>
+    <div id="vex-products"></div>
+    <button id="vex-logout">خروج از پنل</button>
+  </div>
+</section>
+
+<style>
+#vex-admin input,#vex-admin textarea,#vex-admin select{
+ display:block;width:100%;box-sizing:border-box;padding:12px;margin:10px 0;border-radius:8px;border:1px solid #64748b
+}
+#vex-admin button{padding:12px 18px;margin:8px 0;background:#1687ef;color:white;border:0;border-radius:8px}
+#vex-admin .vex-item{padding:12px;margin:10px 0;background:#243247;border-radius:8px}
+</style>
+
+<script>
+(async function(){
+const db=window.supabase.createClient(
+ "https://ozldxbcafjxpejkmfoue.supabase.co",
+ "sb_publishable_lYPYHnVjkjn1KMBx9at7Ow_Iew4Cqaq"
+);
+const adminEmail="rezakeshavarz454545@gmail.com";
+const $=id=>document.getElementById(id);
+const msg=t=>$("vex-message").textContent=t;
+
+async function showProducts(){
+ const {data,error}=await db.from("products").select("*").order("created_at",{ascending:false});
+ if(error){msg(error.message);return;}
+ $("vex-products").replaceChildren();
+ (data||[]).forEach(p=>{
+  const item=document.createElement("div");
+  item.className="vex-item";
+  const title=document.createElement("strong");
+  title.textContent=p.name+" - "+p.price_toman+" تومان";
+  const del=document.createElement("button");
+  del.textContent="حذف محصول";
+  del.onclick=async()=>{
+   if(!confirm("این محصول حذف شود؟"))return;
+   const {error}=await db.from("products").delete().eq("id",p.id);
+   if(error)msg(error.message);else showProducts();
+  };
+  item.append(title,del);
+  $("vex-products").append(item);
+ });
+}
+
+async function checkSession(){
+ const {data}=await db.auth.getSession();
+ const user=data.session?.user;
+ const allowed=user?.email?.toLowerCase()===adminEmail;
+ $("vex-login").hidden=allowed;
+ $("vex-dashboard").hidden=!allowed;
+ if(allowed)showProducts();
+}
+$("vex-login-btn").onclick=async()=>{
+ const {error}=await db.auth.signInWithPassword({
+  email:$("vex-email").value.trim(),
+  password:$("vex-password").value
+ });
+ if(error){msg("خطا: "+error.message);return;}
+ await checkSession();
+};
+$("vex-logout").onclick=async()=>{
+ await db.auth.signOut();
+ await checkSession();
+};
+$("vex-add").onclick=async()=>{
+ msg("در حال ثبت محصول...");
+ const name=$("vex-name").value.trim();
+ const price=Number($("vex-price").value);
+ const stock=Number($("vex-stock").value);
+ const file=$("vex-image").files[0];
+ if(!name||!file||!Number.isFinite(price)||price<=0||!Number.isInteger(stock)||stock<0){
+  msg("نام، عکس، قیمت و موجودی معتبر وارد کن.");return;
+ }
+ if(file.size>5*1024*1024){msg("حجم عکس باید کمتر از ۵ مگابایت باشد.");return;}
+ const ext=file.name.split(".").pop().toLowerCase();
+ const path=crypto.randomUUID()+"."+ext;
+ const {error:uploadError}=await db.storage.from("vex-products").upload(path,file);
+ if(uploadError){msg("خطای آپلود عکس: "+uploadError.message);return;}
+ const {data:urlData}=db.storage.from("vex-products").getPublicUrl(path);
+ const product={
+  name,
+  description:$("vex-description").value,
+  category:$("vex-category").value,
+  price_toman:price,
+  stock,
+  image_url:urlData.publicUrl,
+  is_published:true
+ };
+ const {error}=await db.from("products").insert(product);
+ if(error){msg("خطای ثبت محصول: "+error.message);return;}
+ msg("محصول با موفقیت ثبت شد!");
+ $("vex-name").value="";
+ $("vex-description").value="";
+ $("vex-price").value="";
+ $("vex-stock").value="";
+ $("vex-image").value="";
+ showProducts();
+};
+db.auth.onAuthStateChange(()=>checkSession());
+await checkSession();
+})();
+</script>
 </body></html>
